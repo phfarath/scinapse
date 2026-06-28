@@ -1291,7 +1291,7 @@ public struct CrossrefClient: Sendable {
     private struct Update: Decodable { let DOI: String?; let type: String?; let updated: DateParts? }
 
     public func fetch(doi: String) async throws -> (ResolvedMetadata, RetractionInfo) {
-        let url = URL(string: "https://api.crossref.org/v1/works/\(doi.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? doi)")!
+        guard let url = URL(string: "https://api.crossref.org/v1/works/\(doi.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? doi)") else { throw AppError.invalidResponse }
         let resp = try await http.get(url, headers: ["User-Agent": Config.userAgent])
         guard resp.status != 404 else { throw AppError.notFound }
         guard resp.status == 200 else { throw AppError.invalidResponse }
