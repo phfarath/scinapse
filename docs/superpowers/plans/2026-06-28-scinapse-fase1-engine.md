@@ -1154,11 +1154,10 @@ public final class LiveHTTPClient: HTTPClient, @unchecked Sendable {
                 return HTTPResponse(data: data, status: http.statusCode, finalURL: http.url)
             } catch let urlError as URLError {
                 switch urlError.code {
-                case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .cannotConnectToHost:
-                    throw AppError.offline
-                case .timedOut where attempt >= maxRetries:
+                case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
                     throw AppError.offline
                 default:
+                    // timeout e demais erros: tenta de novo enquanto houver retries; senão repropaga o URLError
                     if attempt < maxRetries { attempt += 1; continue }
                     throw urlError
                 }
