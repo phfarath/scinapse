@@ -246,11 +246,11 @@ final class ModelsTests: XCTestCase {
         let post = Post(title: "Achado", body: "Resumo")
         post.topic = topic
         ctx.insert(post)
-        let cited = Source(rawInput: "10.1/x", kind: .doi)
+        let cited = Source(rawInput: "10.1056/x", kind: .doi)
         ctx.insert(cited)
         post.sources.append(cited)
 
-        let saved = Source(rawInput: "10.2/y", kind: .doi)
+        let saved = Source(rawInput: "10.2000/y", kind: .doi)
         saved.savedStandalone = true
         ctx.insert(saved)
         try ctx.save()
@@ -270,11 +270,11 @@ final class ModelsTests: XCTestCase {
         let ctx = container.mainContext
         let post = Post(title: "P", body: "B")
         ctx.insert(post)
-        let s = Source(rawInput: "10.1/x", kind: .doi)
+        let s = Source(rawInput: "10.1056/x", kind: .doi)
         ctx.insert(s)
         post.sources.append(s)
         try ctx.save()
-        XCTAssertEqual(post.sources.first?.rawInput, "10.1/x")
+        XCTAssertEqual(post.sources.first?.rawInput, "10.1056/x")
         XCTAssertEqual(s.posts.first?.title, "P")
     }
 
@@ -644,7 +644,7 @@ final class IdentifierParserTests: XCTestCase {
         XCTAssertEqual(IdentifierParser.parse("isso não é nada"), .unknown)
     }
     func test_kind_mapsCorrectly() {
-        XCTAssertEqual(IdentifierParser.kind(for: "10.1/x"), .doi)
+        XCTAssertEqual(IdentifierParser.kind(for: "10.1056/x"), .doi)
         XCTAssertEqual(IdentifierParser.kind(for: "123"), .pmid)
         XCTAssertEqual(IdentifierParser.kind(for: "https://x.com"), .url)
     }
@@ -713,6 +713,8 @@ public enum IdentifierParser {
         return nil
     }
 
+    // NOTA: kind() deriva SEMPRE de parse() — sem casos especiais. Fixtures de
+    // teste devem usar DOIs válidos (registrant de 4–9 dígitos), ex: "10.1056/x".
     public static func kind(for raw: String) -> SourceKind {
         switch parse(raw) {
         case .doi: return .doi
@@ -1241,7 +1243,7 @@ final class CrossrefClientTests: XCTestCase {
     func test_throwsNotFoundOn404() async {
         stub("Resource not found.", status: 404)
         let client = CrossrefClient(http: LiveHTTPClient(session: StubURLProtocol.session(), maxRetries: 0))
-        do { _ = try await client.fetch(doi: "10.0/missing"); XCTFail("esperava erro") }
+        do { _ = try await client.fetch(doi: "10.9999/missing"); XCTFail("esperava erro") }
         catch { XCTAssertEqual(error as? AppError, .notFound) }
     }
 }
@@ -1403,7 +1405,7 @@ final class UnpaywallClientTests: XCTestCase {
             return (resp, Data(json.utf8))
         }
         let client = UnpaywallClient(http: LiveHTTPClient(session: StubURLProtocol.session(), maxRetries: 0))
-        let oa = await client.fetch(doi: "10.1/x")
+        let oa = await client.fetch(doi: "10.1056/x")
         XCTAssertTrue(oa.isOpenAccess)
         XCTAssertEqual(oa.status, "gold")
         XCTAssertEqual(oa.url, "https://x/pdf")
@@ -1415,7 +1417,7 @@ final class UnpaywallClientTests: XCTestCase {
             return (resp, Data("<h1>Not Found</h1>".utf8))
         }
         let client = UnpaywallClient(http: LiveHTTPClient(session: StubURLProtocol.session(), maxRetries: 0))
-        let oa = await client.fetch(doi: "10.0/missing")
+        let oa = await client.fetch(doi: "10.9999/missing")
         XCTAssertFalse(oa.isOpenAccess)
     }
 }
@@ -1804,7 +1806,7 @@ final class MetadataServiceTests: XCTestCase {
             let host = req.url!.host ?? ""
             let json: String
             if host.contains("crossref") {
-                json = #"{"status":"ok","message":{"DOI":"10.1/x","title":["T"],"container-title":["J"],"issued":{"date-parts":[[2020]]},"author":[{"given":"A","family":"Bee"}]}}"#
+                json = #"{"status":"ok","message":{"DOI":"10.1056/x","title":["T"],"container-title":["J"],"issued":{"date-parts":[[2020]]},"author":[{"given":"A","family":"Bee"}]}}"#
             } else { // unpaywall
                 json = #"{"is_oa":false,"oa_status":"closed","best_oa_location":null}"#
             }
@@ -1812,7 +1814,7 @@ final class MetadataServiceTests: XCTestCase {
             return (resp, Data(json.utf8))
         }
         let service = MetadataService(http: LiveHTTPClient(session: StubURLProtocol.session(), maxRetries: 0))
-        let result = try await service.verify("10.1/x")
+        let result = try await service.verify("10.1056/x")
         XCTAssertEqual(result.trustTier, .verified)
         XCTAssertEqual(result.metadata.title, "T")
         XCTAssertEqual(result.metadata.authors, ["Bee A"])
@@ -1841,7 +1843,7 @@ final class MetadataServiceTests: XCTestCase {
     func test_offline_throws() async {
         StubURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
         let service = MetadataService(http: LiveHTTPClient(session: StubURLProtocol.session(), maxRetries: 0))
-        do { _ = try await service.verify("10.1/x"); XCTFail("esperava offline") }
+        do { _ = try await service.verify("10.1056/x"); XCTFail("esperava offline") }
         catch { XCTAssertEqual(error as? AppError, .offline) }
     }
 }
@@ -1973,19 +1975,19 @@ final class SourceFetcherTests: XCTestCase {
 
     func test_addSource_verified_populatesMetadataAndCitation() async throws {
         let container = try container()
-        let meta = ResolvedMetadata(title: "T", authors: ["Bee A"], journal: "J", year: 2020, doi: "10.1/x")
-        let result = VerificationResult(metadata: meta, trustTier: .verified, resolvedURL: "https://doi.org/10.1/x")
+        let meta = ResolvedMetadata(title: "T", authors: ["Bee A"], journal: "J", year: 2020, doi: "10.1056/x")
+        let result = VerificationResult(metadata: meta, trustTier: .verified, resolvedURL: "https://doi.org/10.1056/x")
         let resolver = StubResolver(result: .success(result))
         let fetcher = SourceFetcher(modelContainer: container)
 
-        let id = await fetcher.addSource(rawInput: "10.1/x", topicID: nil, postID: nil, savedStandalone: true, using: resolver)
+        let id = await fetcher.addSource(rawInput: "10.1056/x", topicID: nil, postID: nil, savedStandalone: true, using: resolver)
 
         let ctx = ModelContext(container)
         let source = ctx.model(for: id) as? Source
         XCTAssertEqual(source?.trustTier, .verified)
         XCTAssertEqual(source?.verificationState, .completed)
         XCTAssertEqual(source?.title, "T")
-        XCTAssertEqual(source?.normalizedDOI, "10.1/x")
+        XCTAssertEqual(source?.normalizedDOI, "10.1056/x")
         XCTAssertNotNil(source?.formattedCitation)
         XCTAssertTrue(source?.savedStandalone == true)
     }
@@ -1994,7 +1996,7 @@ final class SourceFetcherTests: XCTestCase {
         let container = try container()
         let resolver = StubResolver(result: .failure(AppError.offline))
         let fetcher = SourceFetcher(modelContainer: container)
-        let id = await fetcher.addSource(rawInput: "10.1/x", topicID: nil, postID: nil, savedStandalone: false, using: resolver)
+        let id = await fetcher.addSource(rawInput: "10.1056/x", topicID: nil, postID: nil, savedStandalone: false, using: resolver)
         let ctx = ModelContext(container)
         let source = ctx.model(for: id) as? Source
         XCTAssertEqual(source?.verificationState, .pending)
@@ -2004,9 +2006,9 @@ final class SourceFetcherTests: XCTestCase {
     func test_reverify_updatesPendingSource() async throws {
         let container = try container()
         let fetcher = SourceFetcher(modelContainer: container)
-        let id = await fetcher.addSource(rawInput: "10.1/x", topicID: nil, postID: nil, savedStandalone: false,
+        let id = await fetcher.addSource(rawInput: "10.1056/x", topicID: nil, postID: nil, savedStandalone: false,
                                          using: StubResolver(result: .failure(AppError.offline)))
-        let meta = ResolvedMetadata(title: "Now resolved", authors: ["X Y"], journal: "J", year: 2021, doi: "10.1/x")
+        let meta = ResolvedMetadata(title: "Now resolved", authors: ["X Y"], journal: "J", year: 2021, doi: "10.1056/x")
         let good = VerificationResult(metadata: meta, trustTier: .verified)
         await fetcher.reverify(sourceID: id, using: StubResolver(result: .success(good)))
         let ctx = ModelContext(container)

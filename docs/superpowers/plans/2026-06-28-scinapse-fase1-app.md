@@ -129,7 +129,7 @@ final class SmokeTests: XCTestCase {
     func test_appServices_addSource_viaStubResolver() async throws {
         let container = try ModelContainerFactory.make(inMemory: true)
         let services = AppServices(container: container, resolver: UITestResolver())
-        let id = await services.addSource(rawInput: "10.1/x", topicID: nil, postID: nil, savedStandalone: true)
+        let id = await services.addSource(rawInput: "10.1056/x", topicID: nil, postID: nil, savedStandalone: true)
         let ctx = ModelContext(container)
         let source = ctx.model(for: id) as? Source
         XCTAssertEqual(source?.trustTier, .verified)
@@ -189,8 +189,8 @@ struct UITestResolver: MetadataResolving {
         if lower.contains("blog") || lower.contains("example.com") {
             return VerificationResult(metadata: ResolvedMetadata(title: "Blog"), trustTier: .unverified, resolvedURL: raw)
         }
-        let m = ResolvedMetadata(title: "Artigo Verificado", authors: ["Silva A", "Souza B"], journal: "N Engl J Med", year: 2022, volume: "1", issue: "2", pages: "10-15", doi: "10.1/x")
-        return VerificationResult(metadata: m, trustTier: .verified, resolvedURL: "https://doi.org/10.1/x")
+        let m = ResolvedMetadata(title: "Artigo Verificado", authors: ["Silva A", "Souza B"], journal: "N Engl J Med", year: 2022, volume: "1", issue: "2", pages: "10-15", doi: "10.1056/x")
+        return VerificationResult(metadata: m, trustTier: .verified, resolvedURL: "https://doi.org/10.1056/x")
     }
 }
 ```
@@ -636,7 +636,7 @@ final class AddSourceUITests: XCTestCase {
         let app = launchToTopic()
         app.buttons["saveArticleButton"].tap()
         app.textViews["sourceInputField"].tap()
-        app.textViews["sourceInputField"].typeText("10.1/x")
+        app.textViews["sourceInputField"].typeText("10.1056/x")
         app.buttons["verifySourceButton"].tap()
         XCTAssertTrue(app.staticTexts["Verificada"].waitForExistence(timeout: 3))
     }
@@ -835,7 +835,7 @@ final class PublishGateUITests: XCTestCase {
 
         app.buttons["addSourceToPostButton"].tap()
         app.textViews["sourceInputField"].tap()
-        app.textViews["sourceInputField"].typeText("10.1/x")
+        app.textViews["sourceInputField"].typeText("10.1056/x")
         app.buttons["verifySourceButton"].tap()
         app.buttons["verifySourceButton"].tap() // "Concluir" fecha a sheet
         XCTAssertTrue(app.buttons["publishButton"].waitForExistence(timeout: 3))
@@ -891,7 +891,7 @@ final class PostPageUITests: XCTestCase {
         app.buttons["newPostButton"].tap()
         app.textFields["postTitleField"].tap(); app.textFields["postTitleField"].typeText("Achado X")
         app.buttons["addSourceToPostButton"].tap()
-        app.textViews["sourceInputField"].tap(); app.textViews["sourceInputField"].typeText("10.1/x")
+        app.textViews["sourceInputField"].tap(); app.textViews["sourceInputField"].typeText("10.1056/x")
         app.buttons["verifySourceButton"].tap(); app.buttons["verifySourceButton"].tap()
         app.buttons["publishButton"].tap()
         // abrir a página
@@ -1306,7 +1306,7 @@ final class DigestShareUITests: XCTestCase {
         app.buttons["newPostButton"].tap()
         app.textFields["postTitleField"].tap(); app.textFields["postTitleField"].typeText("Achado")
         app.buttons["addSourceToPostButton"].tap()
-        app.textViews["sourceInputField"].tap(); app.textViews["sourceInputField"].typeText("10.1/x")
+        app.textViews["sourceInputField"].tap(); app.textViews["sourceInputField"].typeText("10.1056/x")
         app.buttons["verifySourceButton"].tap(); app.buttons["verifySourceButton"].tap()
         app.buttons["publishButton"].tap()
         // abre digest e compartilha
