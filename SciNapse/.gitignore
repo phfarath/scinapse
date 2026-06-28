@@ -1,0 +1,4 @@
+SciNapse.xcodeproj/
+.build/
+DerivedData/
+*.xcworkspace/
