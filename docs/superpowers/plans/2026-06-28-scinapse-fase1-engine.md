@@ -1641,8 +1641,8 @@ final class HTMLDoiExtractorTests: XCTestCase {
         XCTAssertEqual(HTMLDoiExtractor.extractDOI(fromHTML: html), "10.1056/abc")
     }
     func test_jsonLD() {
-        let html = #"<script type="application/ld+json">{"@type":"ScholarlyArticle","identifier":{"propertyID":"doi","value":"10.7/zzz"}}</script>"#
-        XCTAssertEqual(HTMLDoiExtractor.extractDOI(fromHTML: html), "10.7/zzz")
+        let html = #"<script type="application/ld+json">{"@type":"ScholarlyArticle","identifier":{"propertyID":"doi","value":"10.7717/zzz"}}</script>"#
+        XCTAssertEqual(HTMLDoiExtractor.extractDOI(fromHTML: html), "10.7717/zzz")
     }
     func test_noDOI() {
         XCTAssertNil(HTMLDoiExtractor.extractDOI(fromHTML: "<html>nada</html>"))
