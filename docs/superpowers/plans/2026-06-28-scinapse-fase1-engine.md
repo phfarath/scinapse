@@ -870,7 +870,7 @@ final class VancouverFormatterTests: XCTestCase {
         XCTAssertTrue(VancouverFormatter.format(m).contains("1995:5."))
     }
     func test_abbreviatePages() {
-        XCTAssertEqual(VancouverFormatter.abbreviatePages(start: "284", end: "287"), "287")
+        XCTAssertEqual(VancouverFormatter.abbreviatePages(start: "284", end: "287"), "7")
         XCTAssertEqual(VancouverFormatter.abbreviatePages(start: "1432", end: "1440"), "40")
         XCTAssertEqual(VancouverFormatter.abbreviatePages(start: "198", end: "204"), "204")
     }
