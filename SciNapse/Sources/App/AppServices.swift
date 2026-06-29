@@ -1,4 +1,3 @@
-// SciNapse/Sources/App/AppServices.swift
 import Foundation
 import SwiftData
 import SciNapseKit
@@ -13,13 +12,38 @@ final class AppServices: ObservableObject {
         self.resolver = resolver
     }
 
-    func addSource(rawInput: String, topicID: PersistentIdentifier?, postID: PersistentIdentifier?, savedStandalone: Bool) async -> PersistentIdentifier {
-        let fetcher = SourceFetcher(modelContainer: container)
-        return await fetcher.addSource(rawInput: rawInput, topicID: topicID, postID: postID, savedStandalone: savedStandalone, using: resolver)
+    private var context: ModelContext { container.mainContext }
+
+    /// Cria as Sources (estado .pending) no contexto principal e as devolve.
+    func createSources(rawInputs: [String], topic: Topic, savedStandalone: Bool) -> [Source] {
+        var created: [Source] = []
+        for raw in rawInputs {
+            let s = Source(rawInput: raw, kind: IdentifierParser.kind(for: raw))
+            s.savedStandalone = savedStandalone
+            s.topic = topic
+            context.insert(s)
+            created.append(s)
+        }
+        try? context.save()
+        return created
     }
 
-    func reverify(_ id: PersistentIdentifier) async {
-        let fetcher = SourceFetcher(modelContainer: container)
-        await fetcher.reverify(sourceID: id, using: resolver)
+    /// Verifica uma fonte (rede) e atualiza no contexto principal — a UI observa.
+    func verify(_ source: Source) async {
+        do {
+            let result = try await resolver.verify(source.rawInput)
+            source.apply(result)
+        } catch let error as AppError where error == .offline {
+            source.markPendingOffline()
+        } catch {
+            source.markFailed()
+        }
+        source.updatedAt = Date()
+        try? context.save()
+    }
+
+    func delete(_ sources: [Source]) {
+        for s in sources { context.delete(s) }
+        try? context.save()
     }
 }

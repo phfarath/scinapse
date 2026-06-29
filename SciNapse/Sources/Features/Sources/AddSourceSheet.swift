@@ -1,4 +1,3 @@
-// SciNapse/Sources/Features/Sources/AddSourceSheet.swift
 import SwiftUI
 import SwiftData
 import SciNapseKit
@@ -7,52 +6,80 @@ struct AddSourceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var services: AppServices
     let topic: Topic
-    let post: Post?
+    let savedStandalone: Bool
+    var onFinish: ([Source]) -> Void = { _ in }
 
     @State private var input = ""
-    @State private var state: ViewState = .editing
-    @State private var previewSource: Source?
-
-    enum ViewState: Equatable { case editing, verifying, done }
+    @State private var queue: [Source] = []
+    @State private var phase: Phase = .editing
+    @State private var noneFound = false
+    enum Phase { case editing, working, done }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("DOI, PMID ou link") {
-                    TextField("ex: 10.1056/… ou https://…", text: $input, axis: .vertical)
-                        .accessibilityIdentifier("sourceInputField")
+                Section {
+                    TextEditor(text: $input)
+                        .frame(minHeight: 90, maxHeight: 200)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .accessibilityIdentifier("sourceInputField")
+                        .onChange(of: input) { noneFound = false }
+                } header: {
+                    Text("Cole um ou vários DOIs, PMIDs ou links")
+                } footer: {
+                    Text("Pode colar uma lista inteira — eu separo e verifico um a um.")
                 }
-                if state == .verifying {
-                    HStack { ProgressView(); Text("Verificando…") }
+                if noneFound {
+                    Text("Nenhum DOI, PMID ou link reconhecido no texto.")
+                        .font(.footnote).foregroundStyle(.red)
                 }
-                if let s = previewSource {
-                    Section("Pré-visualização") { SourcePreviewView(source: s) }
+                if !queue.isEmpty {
+                    Section("Fontes (\(queue.count))") {
+                        ForEach(queue) { s in SourceQueueRow(source: s) }
+                    }
                 }
             }
-            .navigationTitle(post == nil ? "Salvar artigo" : "Adicionar fonte")
+            .navigationTitle(savedStandalone ? "Salvar artigos" : "Adicionar fontes")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(state == .done ? "Concluir" : "Verificar") { Task { await primaryAction() } }
+                    Button(phase == .done ? "Concluir" : "Verificar") { Task { await primary() } }
                         .accessibilityIdentifier("verifySourceButton")
-                        .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty || state == .verifying)
+                        .disabled((phase == .editing && input.trimmingCharacters(in: .whitespaces).isEmpty) || phase == .working)
                 }
-                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { cancel() } }
             }
+            .interactiveDismissDisabled(phase == .working)
         }
     }
 
-    private func primaryAction() async {
-        if state == .done { dismiss(); return }
-        state = .verifying
-        let id = await services.addSource(
-            rawInput: input,
-            topicID: topic.persistentModelID,
-            postID: post?.persistentModelID,
-            savedStandalone: post == nil
-        )
-        let ctx = ModelContext(services.container)
-        previewSource = ctx.model(for: id) as? Source
-        state = .done
+    private func primary() async {
+        if phase == .done { onFinish(queue); dismiss(); return }
+        let ids = IdentifierParser.extractAll(in: input)
+        guard !ids.isEmpty else { noneFound = true; return }
+        phase = .working
+        queue = services.createSources(rawInputs: ids, topic: topic, savedStandalone: savedStandalone)
+        for s in queue { await services.verify(s) }
+        phase = .done
+    }
+
+    private func cancel() {
+        if !savedStandalone { services.delete(queue) }
+        dismiss()
+    }
+}
+
+private struct SourceQueueRow: View {
+    @Bindable var source: Source
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(source.title ?? source.rawInput).font(.subheadline).lineLimit(2)
+                Spacer()
+                if source.verificationState == .pending { ProgressView() }
+            }
+            if source.verificationState != .pending {
+                SourceBadge(tier: source.trustTier, retraction: source.retractionStatus)
+            }
+        }
     }
 }

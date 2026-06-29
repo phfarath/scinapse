@@ -1,4 +1,3 @@
-// SciNapse/Sources/Features/Posts/ComposePostView.swift
 import SwiftUI
 import SwiftData
 import SciNapseKit
@@ -10,85 +9,67 @@ struct ComposePostView: View {
 
     @State private var title = ""
     @State private var body_ = ""
-    @State private var draft: Post?
+    @State private var attachedSources: [Source] = []
     @State private var showingAddSource = false
 
-    private var sources: [Source] { draft?.sources ?? [] }
-    private var canPublish: Bool { PostComposer.canPublish(title: title, sourceCount: sources.count) }
+    private var canPublish: Bool { PostComposer.canPublish(title: title, sourceCount: attachedSources.count) }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Título") {
-                    TextField("Título do achado", text: $title)
-                        .accessibilityIdentifier("postTitleField")
+                    TextField("Título do achado", text: $title).accessibilityIdentifier("postTitleField")
                 }
                 Section("Síntese") {
-                    TextField("O que você descobriu…", text: $body_, axis: .vertical)
-                        .lineLimit(4...10)
+                    TextEditor(text: $body_)
+                        .frame(minHeight: 140, maxHeight: 360)
                         .accessibilityIdentifier("postBodyField")
                 }
                 Section("Fontes (mín. 1 para publicar)") {
-                    ForEach(sources) { s in
-                        HStack {
-                            Text(s.title ?? s.rawInput).lineLimit(1)
-                            Spacer()
+                    ForEach(attachedSources) { s in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(s.title ?? s.rawInput).font(.subheadline).lineLimit(2)
                             SourceBadge(tier: s.trustTier, retraction: s.retractionStatus)
                         }
                     }
-                    Button {
-                        ensureDraft()
-                        showingAddSource = true
-                    } label: {
-                        Label("Adicionar fonte", systemImage: "plus")
+                    .onDelete { idx in
+                        let toRemove = idx.map { attachedSources[$0] }
+                        attachedSources.remove(atOffsets: idx)
+                        context_delete(toRemove)
                     }
-                    .accessibilityIdentifier("addSourceToPostButton")
+                    Button { showingAddSource = true } label: { Label("Adicionar fontes", systemImage: "plus") }
+                        .accessibilityIdentifier("addSourceToPostButton")
                 }
             }
             .navigationTitle("Novo post")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Publicar") { publish() }
-                        .accessibilityIdentifier("publishButton")
-                        .disabled(!canPublish)
+                    Button("Publicar") { publish() }.disabled(!canPublish).accessibilityIdentifier("publishButton")
                 }
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { cancel() }
-                }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { cancel() } }
             }
             .sheet(isPresented: $showingAddSource) {
-                if let draft { AddSourceSheet(topic: topic, post: draft) }
+                AddSourceSheet(topic: topic, savedStandalone: false) { newSources in
+                    attachedSources.append(contentsOf: newSources)
+                }
             }
         }
     }
 
-    private func ensureDraft() {
-        if draft == nil {
-            let p = Post(title: title, body: body_, status: .draft)
-            p.topic = topic
-            context.insert(p)
-            try? context.save()
-            draft = p
-        }
-    }
+    private func context_delete(_ sources: [Source]) { for s in sources { context.delete(s) }; try? context.save() }
 
     private func publish() {
-        ensureDraft()
-        guard let draft else { return }
-        draft.title = title
-        draft.body = body_
-        draft.status = .published
-        draft.publishedAt = Date()
-        draft.updatedAt = Date()
+        let post = Post(title: title.trimmingCharacters(in: .whitespaces), body: body_, status: .published)
+        post.topic = topic
+        post.publishedAt = Date()
+        context.insert(post)
+        for s in attachedSources { post.sources.append(s) }
         try? context.save()
         dismiss()
     }
 
     private func cancel() {
-        if let draft, draft.status == .draft {
-            context.delete(draft)
-            try? context.save()
-        }
+        context_delete(attachedSources)
         dismiss()
     }
 }
