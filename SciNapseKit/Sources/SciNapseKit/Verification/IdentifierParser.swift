@@ -66,6 +66,52 @@ public enum IdentifierParser {
         }
     }
 
+    /// Extrai todos os identificadores (DOIs, PMIDs, URLs) de um texto livre,
+    /// deduplicados e na ordem de aparição. Usado para adicionar fontes em lote.
+    public static func extractAll(in text: String) -> [String] {
+        var results: [String] = []
+        var seen = Set<String>()
+        func add(key: String, value: String) {
+            if seen.insert(key).inserted { results.append(value) }
+        }
+        for raw in regexMatches(doiPattern, in: text) {
+            var d = raw
+            while let last = d.last, ".,;)\"'>".contains(last) { d.removeLast() }
+            add(key: "doi:" + d.lowercased(), value: d)
+        }
+        for raw in regexMatches(#"pubmed\.ncbi\.nlm\.nih\.gov/[1-9]\d{0,7}"#, in: text) {
+            if let pmid = raw.split(separator: "/").last.map(String.init) { add(key: "pmid:" + pmid, value: pmid) }
+        }
+        for cap in regexCaptures(#"(?i)PMID[:\s]+([1-9]\d{0,7})"#, in: text) {
+            add(key: "pmid:" + cap, value: cap)
+        }
+        let tokens = text.split(whereSeparator: { $0.isWhitespace || $0 == "," || $0 == ";" }).map(String.init)
+        for token in tokens {
+            switch parse(token) {
+            case .url(let u):
+                let s = u.absoluteString
+                if extractDOI(in: s) == nil && extractPMID(in: s) == nil { add(key: "url:" + s.lowercased(), value: s) }
+            case .pmid(let p): add(key: "pmid:" + p, value: p)
+            case .doi(let d): add(key: "doi:" + d.lowercased(), value: d)
+            case .unknown: break
+            }
+        }
+        return results
+    }
+
+    private static func regexMatches(_ pattern: String, in text: String) -> [String] {
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
+        let ns = text as NSString
+        return re.matches(in: text, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }
+    }
+    private static func regexCaptures(_ pattern: String, in text: String) -> [String] {
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let ns = text as NSString
+        return re.matches(in: text, range: NSRange(location: 0, length: ns.length)).compactMap {
+            $0.numberOfRanges > 1 ? ns.substring(with: $0.range(at: 1)) : nil
+        }
+    }
+
     private static func looksLikeURL(_ s: String) -> Bool {
         s.lowercased().hasPrefix("http://") || s.lowercased().hasPrefix("https://")
     }

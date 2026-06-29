@@ -29,45 +29,12 @@ public actor SourceFetcher {
     private func resolve(source: Source, rawInput: String, using service: any MetadataResolving) async {
         do {
             let r = try await service.verify(rawInput)
-            apply(r, to: source)
-            source.verificationState = .completed
-        } catch AppError.offline {
-            source.trustTier = .unverified
-            source.verificationState = .pending
+            source.apply(r)
+        } catch let error as AppError where error == .offline {
+            source.markPendingOffline()
         } catch {
-            source.trustTier = .unverified
-            source.verificationState = .failed
+            source.markFailed()
         }
         source.updatedAt = Date()
-    }
-
-    private func apply(_ r: VerificationResult, to s: Source) {
-        let m = r.metadata
-        s.normalizedDOI = m.doi
-        s.pmid = m.pmid
-        s.resolvedURL = r.resolvedURL
-        s.title = m.title
-        s.authors = m.authors
-        s.journal = m.journal
-        s.year = m.year
-        s.month = m.month
-        s.day = m.day
-        s.volume = m.volume
-        s.issue = m.issue
-        s.pages = m.pages
-        s.abstract = m.abstract
-        s.workType = m.workType
-        s.trustTier = r.trustTier
-        s.retractionStatus = r.retraction.status
-        s.retractionDate = r.retraction.date
-        s.retractionNoticeDOI = r.retraction.noticeDOI
-        s.isOpenAccess = r.openAccess.isOpenAccess
-        s.oaStatus = r.openAccess.status
-        s.oaURL = r.openAccess.url
-        s.fetchedAt = Date()
-        // Citação Vancouver só quando há metadados suficientes
-        if m.title != nil || !m.authors.isEmpty {
-            s.formattedCitation = VancouverFormatter.format(m)
-        }
     }
 }

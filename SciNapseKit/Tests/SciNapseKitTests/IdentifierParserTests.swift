@@ -32,4 +32,13 @@ final class IdentifierParserTests: XCTestCase {
         XCTAssertEqual(IdentifierParser.kind(for: "123"), .pmid)
         XCTAssertEqual(IdentifierParser.kind(for: "https://x.com"), .url)
     }
+    func test_extractAll_dedupsAndFindsMultiple() {
+        let text = "Veja 10.1056/NEJMoa2034577 e https://pubmed.ncbi.nlm.nih.gov/33535474/ e PMID: 12345678 e https://www.who.int/x e 10.1056/NEJMoa2034577"
+        let ids = IdentifierParser.extractAll(in: text)
+        XCTAssertEqual(ids.count, 4)
+        XCTAssertTrue(ids.contains("10.1056/NEJMoa2034577"))
+        XCTAssertTrue(ids.contains("33535474"))
+        XCTAssertTrue(ids.contains("12345678"))
+        XCTAssertTrue(ids.contains(where: { $0.contains("who.int") }))
+    }
 }
