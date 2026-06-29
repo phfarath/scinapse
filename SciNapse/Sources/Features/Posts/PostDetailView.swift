@@ -17,7 +17,15 @@ struct PostDetailView: View {
                 Divider()
                 Text("Fontes").font(.title2.bold())
                 ForEach(post.sources) { s in
-                    SourcePreviewView(source: s).padding(.vertical, 4)
+                    NavigationLink {
+                        SourceDetailView(source: s)
+                    } label: {
+                        SourcePreviewView(source: s)
+                            .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                     Divider()
                 }
             }

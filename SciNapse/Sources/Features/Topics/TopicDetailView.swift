@@ -38,12 +38,16 @@ struct TopicDetailView: View {
             if !savedArticles.isEmpty {
                 Section("Artigos salvos") {
                     ForEach(savedArticles) { s in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(s.title ?? s.rawInput).font(.subheadline).lineLimit(2)
-                            if let j = s.journal {
-                                Text("\(j)\(s.year.map { " · \($0)" } ?? "")").font(.caption).foregroundStyle(.secondary)
+                        NavigationLink {
+                            SourceDetailView(source: s)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(s.title ?? s.rawInput).font(.subheadline).lineLimit(2)
+                                if let j = s.journal {
+                                    Text("\(j)\(s.year.map { " · \($0)" } ?? "")").font(.caption).foregroundStyle(.secondary)
+                                }
+                                SourceBadge(tier: s.trustTier, retraction: s.retractionStatus)
                             }
-                            SourceBadge(tier: s.trustTier, retraction: s.retractionStatus)
                         }
                     }
                     .onDelete { idx in

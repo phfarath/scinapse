@@ -60,7 +60,12 @@ struct DigestPageView: View {
             Text(model.topicTitle).font(.title.bold())
             Text("Principais publicações da semana").font(.subheadline).foregroundStyle(.secondary)
             if model.items.isEmpty {
-                Text("Nenhum post publicado neste período.").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Nenhum post publicado nos últimos 7 dias.")
+                        .font(.headline).foregroundStyle(.secondary)
+                    Text("O digest reúne os posts que você publicou nesta janela para compartilhar com colegas (WhatsApp, e-mail ou PDF). Publique um post neste tópico para gerá-lo.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
             }
             ForEach(model.items) { item in
                 VStack(alignment: .leading, spacing: 4) {
