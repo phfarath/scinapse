@@ -7,6 +7,7 @@ import SciNapseKit
 struct ScinapseApp: App {
     let container: ModelContainer
     @StateObject private var services: AppServices
+    @StateObject private var shareInbox = ShareInbox()
 
     init() {
         let inMemory = ProcessInfo.processInfo.arguments.contains("-UITestInMemory")
@@ -21,6 +22,8 @@ struct ScinapseApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(services)
+                .environmentObject(shareInbox)
+                .onOpenURL { shareInbox.handle(url: $0) }
         }
         .modelContainer(container)
     }

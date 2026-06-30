@@ -2,3 +2,5 @@ SciNapse.xcodeproj/
 .build/
 DerivedData/
 *.xcworkspace/
+Sources/App/Info.plist
+ShareExtension/Info.plist
