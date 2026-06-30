@@ -1,16 +1,12 @@
-// SciNapse/Sources/Features/Sources/ReceiveSharedSheet.swift
 import SwiftUI
 import SwiftData
 import SciNapseKit
 
-/// Tela aberta quando um link é compartilhado de outro app para o SciNapse.
-/// Extrai os identificadores, deixa escolher o tópico e verifica em fila.
-struct ReceiveSharedSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
-    @EnvironmentObject private var services: AppServices
+struct ShareRootView: View {
     let sharedText: String
+    let onDone: () -> Void
 
+    @Environment(\.modelContext) private var context
     @Query(sort: \Topic.createdAt, order: .reverse) private var topics: [Topic]
 
     @State private var selectedTopicID: PersistentIdentifier?
@@ -19,6 +15,7 @@ struct ReceiveSharedSheet: View {
     @State private var phase: Phase = .choosing
     enum Phase { case choosing, working, done }
 
+    private let resolver: any MetadataResolving = MetadataService()
     private var ids: [String] { IdentifierParser.extractAll(in: sharedText) }
 
     private var canProceed: Bool {
@@ -39,12 +36,12 @@ struct ReceiveSharedSheet: View {
                         Text("\(ids.count) fonte(s) detectada(s)").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-
                 if phase == .choosing && !ids.isEmpty {
-                    Section("Adicionar ao tópico") {
+                    Section("Salvar no tópico") {
                         ForEach(topics) { t in
                             Button {
                                 selectedTopicID = t.persistentModelID
+                                newTopicName = ""
                             } label: {
                                 HStack {
                                     Text(t.title)
@@ -60,39 +57,37 @@ struct ReceiveSharedSheet: View {
                             .onChange(of: newTopicName) { if !newTopicName.isEmpty { selectedTopicID = nil } }
                     }
                 }
-
                 if !queue.isEmpty {
                     Section("Fontes (\(queue.count))") {
-                        ForEach(queue) { s in SharedSourceRow(source: s) }
+                        ForEach(queue) { s in ShareSourceRow(source: s) }
                     }
                 }
             }
-            .navigationTitle("Compartilhado")
+            .navigationTitle("Salvar no SciNapse")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(phase == .done ? "Concluir" : "Adicionar") { Task { await primary() } }
                         .disabled(!canProceed)
                 }
-                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { onDone() } }
             }
             .interactiveDismissDisabled(phase == .working)
         }
     }
 
     private func primary() async {
-        if phase == .done { dismiss(); return }
+        if phase == .done { onDone(); return }
         let topic = resolveTopic()
         phase = .working
-        queue = services.createSources(rawInputs: ids, topic: topic, savedStandalone: true)
-        for s in queue { await services.verify(s) }
+        let writer = SourceWriter(context: context, resolver: resolver)
+        queue = writer.createSources(rawInputs: ids, topic: topic, savedStandalone: true)
+        for s in queue { await writer.verify(s) }
         phase = .done
     }
 
     private func resolveTopic() -> Topic {
-        if let id = selectedTopicID, let t = context.model(for: id) as? Topic {
-            return t
-        }
+        if let id = selectedTopicID, let t = context.model(for: id) as? Topic { return t }
         let name = newTopicName.trimmingCharacters(in: .whitespaces)
         let t = Topic(title: name.isEmpty ? "Compartilhados" : name)
         context.insert(t)
@@ -101,7 +96,7 @@ struct ReceiveSharedSheet: View {
     }
 }
 
-private struct SharedSourceRow: View {
+private struct ShareSourceRow: View {
     @Bindable var source: Source
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -111,7 +106,7 @@ private struct SharedSourceRow: View {
                 if source.verificationState == .pending { ProgressView() }
             }
             if source.verificationState != .pending {
-                SourceBadge(tier: source.trustTier, retraction: source.retractionStatus)
+                ShareSourceBadge(tier: source.trustTier, retraction: source.retractionStatus)
             }
         }
     }

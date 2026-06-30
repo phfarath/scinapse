@@ -1,19 +1,28 @@
 import UIKit
+import SwiftUI
+import SwiftData
+import SciNapseKit
 import UniformTypeIdentifiers
 
-/// Share Extension: recebe um link (ou texto) compartilhado de outro app,
-/// abre o SciNapse via deep link `scinapse://share?text=...` e encerra.
-/// Sem App Group — funciona com conta Apple gratuita.
 final class ShareViewController: UIViewController {
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        Task { await run() }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        Task { await setup() }
     }
 
-    private func run() async {
-        let text = await extractSharedText()
-        openHost(with: text)
+    private func setup() async {
+        let text = await extractSharedText() ?? ""
+        guard let container = try? ModelContainerFactory.make(appGroupID: Config.appGroupID) else {
+            finish(); return
+        }
+        let root = ShareRootView(sharedText: text, onDone: { [weak self] in self?.finish() })
+            .modelContainer(container)
+        let host = UIHostingController(rootView: root)
+        addChild(host)
+        host.view.frame = view.bounds
+        host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(host.view)
+        host.didMove(toParent: self)
     }
 
     private func extractSharedText() async -> String? {
@@ -21,7 +30,6 @@ final class ShareViewController: UIViewController {
               let providers = item.attachments, !providers.isEmpty else { return nil }
         let urlType = UTType.url.identifier
         let textType = UTType.plainText.identifier
-
         if let p = providers.first(where: { $0.hasItemConformingToTypeIdentifier(urlType) }),
            let data = try? await p.loadItem(forTypeIdentifier: urlType) {
             return (data as? URL)?.absoluteString ?? (data as? String)
@@ -31,18 +39,6 @@ final class ShareViewController: UIViewController {
             return data as? String
         }
         return nil
-    }
-
-    private func openHost(with text: String?) {
-        guard let text,
-              let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "scinapse://share?text=\(encoded)") else {
-            finish()
-            return
-        }
-        extensionContext?.open(url) { [weak self] _ in
-            Task { @MainActor in self?.finish() }
-        }
     }
 
     private func finish() {

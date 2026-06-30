@@ -17,25 +17,26 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.phfarath.scinapse
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
-    info:
-      path: Sources/App/Info.plist
+    entitlements:
+      path: Sources/App/SciNapse.entitlements
       properties:
-        UILaunchScreen: {}
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-        CFBundleURLTypes:
-          - CFBundleURLName: com.phfarath.scinapse
-            CFBundleURLSchemes:
-              - scinapse
+        com.apple.security.application-groups:
+          - group.com.phfarath.scinapse
   SciNapseShare:
     type: app-extension
     platform: iOS
     sources: [ShareExtension]
+    dependencies:
+      - package: SciNapseKit
     settings:
       base:
         SWIFT_VERSION: "6.0"
@@ -44,6 +45,11 @@ targets:
         CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
+    entitlements:
+      path: ShareExtension/SciNapseShare.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.phfarath.scinapse
     info:
       path: ShareExtension/Info.plist
       properties:

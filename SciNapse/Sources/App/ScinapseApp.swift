@@ -7,11 +7,10 @@ import SciNapseKit
 struct ScinapseApp: App {
     let container: ModelContainer
     @StateObject private var services: AppServices
-    @StateObject private var shareInbox = ShareInbox()
 
     init() {
         let inMemory = ProcessInfo.processInfo.arguments.contains("-UITestInMemory")
-        let c = try! ModelContainerFactory.make(inMemory: inMemory)
+        let c = try! ModelContainerFactory.make(inMemory: inMemory, appGroupID: inMemory ? nil : Config.appGroupID)
         self.container = c
         let useStub = ProcessInfo.processInfo.arguments.contains("-UITestStubVerification")
         let resolver: any MetadataResolving = useStub ? UITestResolver() : MetadataService()
@@ -22,8 +21,6 @@ struct ScinapseApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(services)
-                .environmentObject(shareInbox)
-                .onOpenURL { shareInbox.handle(url: $0) }
         }
         .modelContainer(container)
     }

@@ -4,3 +4,5 @@ DerivedData/
 *.xcworkspace/
 Sources/App/Info.plist
 ShareExtension/Info.plist
+Sources/App/SciNapse.entitlements
+ShareExtension/SciNapseShare.entitlements
