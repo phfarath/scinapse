@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SciNapse</title>
+<style>
+  :root { --blue:#1267EA; --blue-deep:#0642B5; --teal:#14D7B1; --ink:#0f172a; --muted:#64748b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:#f1f5f9; line-height:1.5; }
+  header.brand { background:linear-gradient(135deg,var(--blue),var(--blue-deep) 55%,var(--teal)); color:#fff; padding:28px 16px; }
+  header.brand .inner { max-width:720px; margin:0 auto; }
+  .word { font-weight:800; letter-spacing:-.5px; opacity:.9; font-size:15px; }
+  h1 { margin:6px 0 4px; font-size:26px; line-height:1.2; }
+  .updated { font-size:13px; opacity:.85; }
+  main.wrap { max-width:720px; margin:0 auto; padding:0 16px 64px; }
+  .synth { background:#fff; border-radius:16px; padding:18px; margin-top:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .date { font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .synth-text { font-size:16px; white-space:pre-wrap; }
+  .sources-h { margin-top:14px; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:700; }
+  ul.sources { list-style:none; margin:8px 0 0; padding:0; }
+  li.source { border-top:1px solid #eef2f6; padding:12px 0; }
+  li.source:first-child { border-top:0; }
+  .cite { font-size:14px; color:#1f2937; }
+  .badges { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+  .badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; border:1px solid transparent; }
+  .badge.retr { color:#b91c1c; background:#fee2e2; border-color:#fecaca; }
+  .srclink { display:inline-block; margin-top:8px; font-size:13px; color:var(--blue); text-decoration:none; font-weight:600; }
+  .nosrc { color:#b91c1c; font-size:13px; margin-top:8px; }
+  .state { color:var(--muted); text-align:center; margin-top:64px; padding:0 24px; }
+  footer { text-align:center; color:var(--muted); font-size:12px; margin-top:28px; padding-bottom:24px; }
+</style>
+</head>
+<body>
+  <header class="brand"><div class="inner"><div class="word">SciNapse</div><h1 id="title">Carregando…</h1><div class="updated" id="updated"></div></div></header>
+  <main class="wrap" id="content"><p class="state">Carregando…</p></main>
+  <footer>Publicado via SciNapse · fontes verificáveis</footer>
+
+<script>
+  const SUPABASE_URL = "https://gbkknpzayiqrknebzoxr.supabase.co";
+  const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdia2tucHpheWlxcmtuZWJ6b3hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDA1NTcsImV4cCI6MjA5ODM3NjU1N30.soxOemB1vvBLBkijYQ4-MtmuvOoayEyQUfbU7pza5gQ";
+
+  const tierLabel = { verified:"Verificada", recognized:"Reconhecida", unverified:"Não verificada" };
+  const tierColor = { verified:"#007A78", recognized:"#1267EA", unverified:"#C2410C" };
+  const retractionLabel = { retracted:"Retratado", correction:"Corrigido", concern:"Com ressalva" };
+
+  function esc(s) {
+    return String(s ?? "")
+      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#39;");
+  }
+
+  function renderSource(src) {
+    const tier = String(src?.tier ?? "unverified");
+    const color = tierColor[tier] ?? "#6B7280";
+    const badge = `<span class="badge" style="color:${color};border-color:${color}33;background:${color}14">${esc(tierLabel[tier] ?? tier)}</span>`;
+    const retr = (src?.retraction && src.retraction !== "none")
+      ? `<span class="badge retr">${esc(retractionLabel[src.retraction] ?? "Retratado")}</span>` : "";
+    const cite = src?.vancouver ? `<div class="cite">${esc(src.vancouver)}</div>` : "";
+    const link = src?.url ? `<a class="srclink" href="${esc(src.url)}" target="_blank" rel="noopener noreferrer">Abrir fonte ↗</a>` : "";
+    return `<li class="source">${cite}<div class="badges">${badge}${retr}</div>${link}</li>`;
+  }
+
+  function renderSynthesis(s) {
+    const date = s?.date ? `<div class="date">${esc(String(s.date).slice(0,10))}</div>` : "";
+    const text = `<div class="synth-text">${esc(s?.text ?? "")}</div>`;
+    const sources = (Array.isArray(s?.sources) && s.sources.length)
+      ? `<ul class="sources">${s.sources.map(renderSource).join("")}</ul>`
+      : `<div class="nosrc">Sem fontes.</div>`;
+    return `<article class="synth">${date}${text}<div class="sources-h">Fontes</div>${sources}</article>`;
+  }
+
+  function showState(msg) {
+    document.getElementById("title").textContent = "SciNapse";
+    document.getElementById("content").innerHTML = `<p class="state">${esc(msg)}</p>`;
+  }
+
+  async function load() {
+    const slug = location.hash.slice(1).trim();
+    if (!slug) { showState("Link inválido — sem identificador de página."); return; }
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/published_topics?slug=eq.${encodeURIComponent(slug)}&select=title,data,updated_at`,
+        { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } }
+      );
+      if (!res.ok) { showState("Não foi possível carregar esta página."); return; }
+      const rows = await res.json();
+      if (!rows.length) { showState("Página não encontrada. Este link não existe ou foi removido."); return; }
+      const row = rows[0];
+      const data = row.data ?? {};
+      const title = row.title ?? data.title ?? "SciNapse";
+      document.title = `${title} · SciNapse`;
+      document.getElementById("title").textContent = title;
+      document.getElementById("updated").textContent = row.updated_at
+        ? `Atualizado em ${String(row.updated_at).slice(0,10)}` : "";
+      const syntheses = Array.isArray(data.syntheses) ? data.syntheses : [];
+      document.getElementById("content").innerHTML = syntheses.length
+        ? syntheses.map(renderSynthesis).join("")
+        : `<p class="state">Nenhuma síntese publicada ainda.</p>`;
+    } catch (e) {
+      showState("Erro de conexão ao carregar a página.");
+    }
+  }
+
+  window.addEventListener("hashchange", load);
+  load();
+</script>
+</body>
+</html>
