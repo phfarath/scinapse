@@ -17,6 +17,7 @@
   main.wrap { max-width:720px; margin:0 auto; padding:0 16px 64px; }
   .synth { background:#fff; border-radius:16px; padding:18px; margin-top:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
   .date { font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .synth-title { font-size:18px; font-weight:700; margin-bottom:4px; }
   .synth-text { font-size:16px; white-space:pre-wrap; }
   .sources-h { margin-top:14px; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:700; }
   ul.sources { list-style:none; margin:8px 0 0; padding:0; }
@@ -64,11 +65,12 @@
 
   function renderSynthesis(s) {
     const date = s?.date ? `<div class="date">${esc(String(s.date).slice(0,10))}</div>` : "";
+    const heading = s?.title ? `<div class="synth-title">${esc(s.title)}</div>` : "";
     const text = `<div class="synth-text">${esc(s?.text ?? "")}</div>`;
     const sources = (Array.isArray(s?.sources) && s.sources.length)
       ? `<ul class="sources">${s.sources.map(renderSource).join("")}</ul>`
       : `<div class="nosrc">Sem fontes.</div>`;
-    return `<article class="synth">${date}${text}<div class="sources-h">Fontes</div>${sources}</article>`;
+    return `<article class="synth">${date}${heading}${text}<div class="sources-h">Fontes</div>${sources}</article>`;
   }
 
   function showState(msg) {
