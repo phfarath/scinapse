@@ -41,4 +41,20 @@ final class IdentifierParserTests: XCTestCase {
         XCTAssertTrue(ids.contains("12345678"))
         XCTAssertTrue(ids.contains(where: { $0.contains("who.int") }))
     }
+
+    func test_extractAll_keepsBarePMIDs() {
+        // Comportamento legado usado pelo "Adicionar fontes": número solto = PMID.
+        XCTAssertEqual(IdentifierParser.extractAll(in: "33535474 12345678"), ["33535474", "12345678"])
+    }
+
+    func test_extractAllInProse_ignoresBareNumbers_keepsLabeledAndDOIs() {
+        let text = "Estudo com 664 pacientes nas primeiras 24h. PMID: 12345678 e 10.1056/NEJMoa2034577 e https://www.who.int/x"
+        let ids = IdentifierParser.extractAllInProse(in: text)
+        XCTAssertEqual(ids.count, 3)                        // 664 e 24 NÃO entram
+        XCTAssertFalse(ids.contains("664"))
+        XCTAssertFalse(ids.contains("24"))
+        XCTAssertTrue(ids.contains("12345678"))            // PMID rotulado entra
+        XCTAssertTrue(ids.contains("10.1056/NEJMoa2034577"))
+        XCTAssertTrue(ids.contains(where: { $0.contains("who.int") }))
+    }
 }

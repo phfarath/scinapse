@@ -67,8 +67,21 @@ public enum IdentifierParser {
     }
 
     /// Extrai todos os identificadores (DOIs, PMIDs, URLs) de um texto livre,
-    /// deduplicados e na ordem de aparição. Usado para adicionar fontes em lote.
+    /// deduplicados e na ordem de aparição. Usado para adicionar fontes em lote
+    /// a partir de uma lista já identificada (aceita PMIDs "soltos").
     public static func extractAll(in text: String) -> [String] {
+        extractIdentifiers(in: text, includeBarePMIDs: true)
+    }
+
+    /// Como `extractAll`, mas ignora números "soltos" — em prosa eles são quase
+    /// sempre anos/quantidades (ex.: "664 pacientes", "24h"), não PMIDs. Use ao
+    /// extrair fontes de texto corrido colado; DOIs, PMIDs rotulados ("PMID: x"),
+    /// URLs do PubMed e links http continuam sendo capturados.
+    public static func extractAllInProse(in text: String) -> [String] {
+        extractIdentifiers(in: text, includeBarePMIDs: false)
+    }
+
+    private static func extractIdentifiers(in text: String, includeBarePMIDs: Bool) -> [String] {
         var results: [String] = []
         var seen = Set<String>()
         func add(key: String, value: String) {
@@ -91,7 +104,7 @@ public enum IdentifierParser {
             case .url(let u):
                 let s = u.absoluteString
                 if extractDOI(in: s) == nil && extractPMID(in: s) == nil { add(key: "url:" + s.lowercased(), value: s) }
-            case .pmid(let p): add(key: "pmid:" + p, value: p)
+            case .pmid(let p): if includeBarePMIDs { add(key: "pmid:" + p, value: p) }
             case .doi(let d): add(key: "doi:" + d.lowercased(), value: d)
             case .unknown: break
             }
