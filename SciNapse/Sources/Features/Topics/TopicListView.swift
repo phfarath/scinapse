@@ -41,6 +41,10 @@ struct TopicListView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink { PublishedPagesView() } label: { Image(systemName: "globe") }
+                        .accessibilityIdentifier("myPagesButton")
+                }
                 ToolbarItem(placement: .principal) { SciNapseWordmark() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingNew = true } label: { Image(systemName: "plus") }

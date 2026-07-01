@@ -1,7 +1,14 @@
 // SciNapseKit/Sources/SciNapseKit/Publish/PublishClient.swift
-// Fase 2a — monta o snapshot público de um tópico (posts publicados + fontes)
-// e chama a edge function `publish`. Página viva: reusa o slug guardado em Topic.remoteID.
+// Fase 2a — publica snapshots públicos (tópico inteiro, recorte semanal ou post único),
+// despublica e lê o contador de visualizações. Página viva: reusa o slug guardado.
 import Foundation
+
+// MARK: - Escopo do recorte
+
+public enum PublishScope: Sendable {
+    case all        // todos os posts publicados do tópico
+    case lastWeek   // só os últimos 7 dias
+}
 
 // MARK: - DTOs do snapshot (contrato com a edge function `publish` e o reader)
 
@@ -50,9 +57,9 @@ public enum PublishError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .noSyntheses: return "Publique ao menos um post neste tópico antes de gerar a página."
-        case .network: return "Falha de conexão ao publicar."
-        case .server(let status, _): return "O servidor recusou a publicação (HTTP \(status))."
+        case .noSyntheses: return "Publique ao menos um post (com fonte) antes de gerar a página."
+        case .network: return "Falha de conexão."
+        case .server(let status, _): return "O servidor recusou a operação (HTTP \(status))."
         }
     }
 }
@@ -63,40 +70,37 @@ public struct PublishClient: Sendable {
     private let session: URLSession
     public init(session: URLSession = .shared) { self.session = session }
 
-    /// Monta o snapshot dos posts publicados do tópico e publica. Retorna slug + URL.
-    /// O chamador deve gravar `result.slug` em `topic.remoteID` (página viva).
+    /// Publica o tópico (escopo Tudo/Última semana). Página viva via `topic.remoteID`.
     @MainActor
-    public func publish(topic: Topic) async throws -> PublishResult {
-        let snapshot = Self.snapshot(from: topic)
+    public func publish(topic: Topic, scope: PublishScope = .all) async throws -> PublishResult {
+        let snapshot = Self.snapshot(from: topic, scope: scope)
         guard !snapshot.syntheses.isEmpty else { throw PublishError.noSyntheses }
+        return try await send(slug: topic.remoteID, title: topic.title, data: snapshot)
+    }
 
-        struct Request: Encodable {
-            let slug: String?
-            let title: String
-            let data: PublishSnapshot
-            let secret: String
-        }
-        let payload = Request(slug: topic.remoteID, title: topic.title, data: snapshot, secret: Config.publishSecret)
+    /// Publica um post único como página própria. Página viva via `post.remoteID`.
+    @MainActor
+    public func publish(post: Post) async throws -> PublishResult {
+        let snapshot = Self.snapshot(fromPost: post)
+        return try await send(slug: post.remoteID, title: post.title, data: snapshot)
+    }
 
-        guard let url = URL(string: "\(Config.supabaseURL)/functions/v1/publish") else { throw PublishError.network }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(Config.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(Config.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.httpBody = try JSONEncoder().encode(payload)
+    /// Tira a página do ar (deleta a linha). Gated pelo PUBLISH_SECRET na função.
+    public func unpublish(slug: String) async throws {
+        struct Body: Encodable { let slug: String; let secret: String }
+        _ = try await postFunction(path: "unpublish", body: Body(slug: slug, secret: Config.publishSecret))
+    }
 
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw PublishError.network
-        }
-        guard let http = response as? HTTPURLResponse else { throw PublishError.network }
-        guard (200..<300).contains(http.statusCode) else {
-            throw PublishError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
-        }
-        return try JSONDecoder().decode(PublishResult.self, from: data)
+    /// Lê o contador de visualizações de um slug (nil se falhar/não existir).
+    public func views(forSlug slug: String) async -> Int? {
+        guard let url = URL(string: "\(Config.supabaseURL)/rest/v1/published_topics?slug=eq.\(slug)&select=views") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue(Config.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(Config.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await session.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        struct Row: Decodable { let views: Int }
+        return (try? JSONDecoder().decode([Row].self, from: data))?.first?.views
     }
 
     /// URL pública de um slug já publicado (reconstruída, sem rede).
@@ -104,25 +108,76 @@ public struct PublishClient: Sendable {
         URL(string: "\(Config.readerBaseURL)#\(slug)")
     }
 
+    // MARK: - Rede
+
+    private func send(slug: String?, title: String, data: PublishSnapshot) async throws -> PublishResult {
+        struct Request: Encodable {
+            let slug: String?
+            let title: String
+            let data: PublishSnapshot
+            let secret: String
+        }
+        let payload = Request(slug: slug, title: title, data: data, secret: Config.publishSecret)
+        let respData = try await postFunction(path: "publish", body: payload)
+        return try JSONDecoder().decode(PublishResult.self, from: respData)
+    }
+
+    @discardableResult
+    private func postFunction<B: Encodable>(path: String, body: B) async throws -> Data {
+        guard let url = URL(string: "\(Config.supabaseURL)/functions/v1/\(path)") else { throw PublishError.network }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(Config.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        req.setValue(Config.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response): (Data, URLResponse)
+        do { (data, response) = try await session.data(for: req) } catch { throw PublishError.network }
+        guard let http = response as? HTTPURLResponse else { throw PublishError.network }
+        guard (200..<300).contains(http.statusCode) else {
+            throw PublishError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
+    }
+
     // MARK: - Montagem do snapshot (roda no contexto do modelo)
 
     @MainActor
-    static func snapshot(from topic: Topic) -> PublishSnapshot {
+    static func snapshot(from topic: Topic, scope: PublishScope) -> PublishSnapshot {
         let iso = ISO8601DateFormatter()
-        let posts = topic.posts
-            .filter { $0.status == .published }
-            .sorted { ($0.publishedAt ?? $0.createdAt) > ($1.publishedAt ?? $1.createdAt) }
-
-        let syntheses = posts.map { post in
-            SynthesisDTO(
-                id: post.id.uuidString,
-                title: post.title,
-                text: post.body,
-                date: iso.string(from: post.publishedAt ?? post.createdAt),
-                sources: post.sources.map(sourceDTO)
-            )
+        var posts = topic.posts.filter { $0.status == .published }
+        if scope == .lastWeek {
+            let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
+            posts = posts.filter { ($0.publishedAt ?? $0.createdAt) >= cutoff }
         }
-        return PublishSnapshot(title: topic.title, publishedAt: iso.string(from: Date()), syntheses: syntheses)
+        posts.sort { ($0.publishedAt ?? $0.createdAt) > ($1.publishedAt ?? $1.createdAt) }
+        return PublishSnapshot(
+            title: topic.title,
+            publishedAt: iso.string(from: Date()),
+            syntheses: posts.map { synthesisDTO($0, iso: iso) }
+        )
+    }
+
+    @MainActor
+    static func snapshot(fromPost post: Post) -> PublishSnapshot {
+        let iso = ISO8601DateFormatter()
+        return PublishSnapshot(
+            title: post.title,
+            publishedAt: iso.string(from: Date()),
+            syntheses: [synthesisDTO(post, iso: iso)]
+        )
+    }
+
+    @MainActor
+    private static func synthesisDTO(_ post: Post, iso: ISO8601DateFormatter) -> SynthesisDTO {
+        SynthesisDTO(
+            id: post.id.uuidString,
+            title: post.title,
+            text: post.body,
+            date: iso.string(from: post.publishedAt ?? post.createdAt),
+            sources: post.sources.map(sourceDTO)
+        )
     }
 
     @MainActor

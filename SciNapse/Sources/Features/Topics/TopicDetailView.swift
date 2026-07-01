@@ -11,6 +11,8 @@ struct TopicDetailView: View {
     @State private var isPublishing = false
     @State private var publishError: String?
     @State private var showShare = false
+    @State private var views: Int?
+    @State private var showConfirmUnpublish = false
 
     @Query private var allSaved: [Source]
 
@@ -30,17 +32,31 @@ struct TopicDetailView: View {
         List {
             Section {
                 if let url = publishedURL {
-                    Label("Publicado", systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(Brand.tealDeep)
+                    HStack {
+                        Label("Publicado", systemImage: "checkmark.seal.fill").foregroundStyle(Brand.tealDeep)
+                        Spacer()
+                        if let v = views {
+                            Label("\(v)", systemImage: "eye").font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
                     Link(destination: url) {
                         Text(url.absoluteString).font(.caption).lineLimit(1).truncationMode(.middle)
                     }
                     Button { showShare = true } label: { Label("Compartilhar link", systemImage: "square.and.arrow.up") }
-                    Button { publishPage() } label: {
+                    Menu {
+                        Button { publishPage(scope: .all) } label: { Label("Tudo", systemImage: "tray.full") }
+                        Button { publishPage(scope: .lastWeek) } label: { Label("Última semana", systemImage: "calendar") }
+                    } label: {
                         HStack { Label("Atualizar página", systemImage: "arrow.clockwise"); if isPublishing { Spacer(); ProgressView() } }
                     }.disabled(isPublishing)
+                    Button(role: .destructive) { showConfirmUnpublish = true } label: {
+                        Label("Despublicar", systemImage: "trash")
+                    }.disabled(isPublishing)
                 } else {
-                    Button { publishPage() } label: {
+                    Menu {
+                        Button { publishPage(scope: .all) } label: { Label("Tudo", systemImage: "tray.full") }
+                        Button { publishPage(scope: .lastWeek) } label: { Label("Última semana (digest)", systemImage: "calendar") }
+                    } label: {
                         HStack { Label("Publicar página", systemImage: "globe"); if isPublishing { Spacer(); ProgressView() } }
                     }
                     .disabled(isPublishing || publishedPosts.isEmpty)
@@ -106,24 +122,56 @@ struct TopicDetailView: View {
         .sheet(isPresented: $showingCompose) { ComposePostView(topic: topic) }
         .sheet(isPresented: $showingDigest) { WeeklyDigestView(topic: topic) }
         .sheet(isPresented: $showShare) {
-            if let url = publishedURL { ShareSheet(activityItems: [url]) }
+            if let url = publishedURL { PublishShareView(url: url, title: topic.title) }
         }
+        .confirmationDialog("Despublicar esta página?", isPresented: $showConfirmUnpublish, titleVisibility: .visible) {
+            Button("Despublicar", role: .destructive) { unpublishTopic() }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("O link sai do ar. Você pode publicar de novo depois.")
+        }
+        .task(id: topic.remoteID) { await refreshViews() }
     }
 
-    private func publishPage() {
+    private func publishPage(scope: PublishScope) {
         isPublishing = true
         publishError = nil
         Task {
             do {
-                let result = try await PublishClient().publish(topic: topic)
+                let result = try await PublishClient().publish(topic: topic, scope: scope)
                 topic.remoteID = result.slug
                 topic.syncStatus = .synced
                 topic.updatedAt = Date()
                 try? context.save()
+                await refreshViews()
             } catch {
                 publishError = (error as? PublishError)?.errorDescription ?? error.localizedDescription
             }
             isPublishing = false
         }
+    }
+
+    private func unpublishTopic() {
+        guard let slug = topic.remoteID else { return }
+        isPublishing = true
+        publishError = nil
+        Task {
+            do {
+                try await PublishClient().unpublish(slug: slug)
+                topic.remoteID = nil
+                topic.syncStatus = .pending
+                topic.updatedAt = Date()
+                try? context.save()
+                views = nil
+            } catch {
+                publishError = (error as? PublishError)?.errorDescription ?? error.localizedDescription
+            }
+            isPublishing = false
+        }
+    }
+
+    private func refreshViews() async {
+        guard let slug = topic.remoteID else { views = nil; return }
+        views = await PublishClient().views(forSlug: slug)
     }
 }
