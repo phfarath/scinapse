@@ -8,6 +8,9 @@ struct TopicDetailView: View {
     @State private var showingAddSource = false
     @State private var showingCompose = false
     @State private var showingDigest = false
+    @State private var isPublishing = false
+    @State private var publishError: String?
+    @State private var showShare = false
 
     @Query private var allSaved: [Source]
 
@@ -21,9 +24,37 @@ struct TopicDetailView: View {
             .sorted { ($0.publishedAt ?? $0.createdAt) > ($1.publishedAt ?? $1.createdAt) }
     }
     private var savedArticles: [Source] { allSaved.filter { $0.topic?.id == topic.id } }
+    private var publishedURL: URL? { topic.remoteID.flatMap { PublishClient.publicURL(forSlug: $0) } }
 
     var body: some View {
         List {
+            Section {
+                if let url = publishedURL {
+                    Label("Publicado", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(Brand.tealDeep)
+                    Link(destination: url) {
+                        Text(url.absoluteString).font(.caption).lineLimit(1).truncationMode(.middle)
+                    }
+                    Button { showShare = true } label: { Label("Compartilhar link", systemImage: "square.and.arrow.up") }
+                    Button { publishPage() } label: {
+                        HStack { Label("Atualizar página", systemImage: "arrow.clockwise"); if isPublishing { Spacer(); ProgressView() } }
+                    }.disabled(isPublishing)
+                } else {
+                    Button { publishPage() } label: {
+                        HStack { Label("Publicar página", systemImage: "globe"); if isPublishing { Spacer(); ProgressView() } }
+                    }
+                    .disabled(isPublishing || publishedPosts.isEmpty)
+                    .accessibilityIdentifier("publishPageButton")
+                    if publishedPosts.isEmpty {
+                        Text("Publique ao menos um post para gerar a página.").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if let err = publishError {
+                    Text(err).font(.caption).foregroundStyle(.red)
+                }
+            } header: {
+                Text("Página pública")
+            }
             Section("Posts") {
                 if publishedPosts.isEmpty { Text("Sem posts ainda").foregroundStyle(.secondary) }
                 ForEach(publishedPosts) { post in
@@ -74,5 +105,25 @@ struct TopicDetailView: View {
         .sheet(isPresented: $showingAddSource) { AddSourceSheet(topic: topic, savedStandalone: true) }
         .sheet(isPresented: $showingCompose) { ComposePostView(topic: topic) }
         .sheet(isPresented: $showingDigest) { WeeklyDigestView(topic: topic) }
+        .sheet(isPresented: $showShare) {
+            if let url = publishedURL { ShareSheet(activityItems: [url]) }
+        }
+    }
+
+    private func publishPage() {
+        isPublishing = true
+        publishError = nil
+        Task {
+            do {
+                let result = try await PublishClient().publish(topic: topic)
+                topic.remoteID = result.slug
+                topic.syncStatus = .synced
+                topic.updatedAt = Date()
+                try? context.save()
+            } catch {
+                publishError = (error as? PublishError)?.errorDescription ?? error.localizedDescription
+            }
+            isPublishing = false
+        }
     }
 }

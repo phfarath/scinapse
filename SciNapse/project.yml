@@ -25,9 +25,13 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
+    configFiles:
+      Debug: Secrets.xcconfig
+      Release: Secrets.xcconfig
     info:
       path: Sources/App/Info.plist
       properties:
+        PublishSecret: "$(SCINAPSE_PUBLISH_SECRET)"
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchLogo

@@ -11,3 +11,6 @@ DerivedData/
 .playwright-mcp/
 /scinapse-published-page.png
 /scinapse-reader-render.png
+
+# Secret de publicação (Fase 2a) — nunca versionar; use Secrets.example.xcconfig como modelo
+SciNapse/Secrets.xcconfig
