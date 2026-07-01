@@ -33,6 +33,7 @@ targets:
       path: Sources/App/Info.plist
       properties:
         PublishSecret: "$(SCINAPSE_PUBLISH_SECRET)"
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchLogo
