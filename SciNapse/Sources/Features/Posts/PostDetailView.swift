@@ -10,7 +10,7 @@ struct PostDetailView: View {
     @State private var isPublishing = false
     @State private var publishError: String?
     @State private var showShare = false
-    @State private var views: Int?
+    @State private var stats: PageStats?
     @State private var showConfirmUnpublish = false
 
     private var publishedURL: URL? { post.remoteID.flatMap { PublishClient.publicURL(forSlug: $0) } }
@@ -70,7 +70,7 @@ struct PostDetailView: View {
         } message: {
             Text("O link deste post sai do ar.")
         }
-        .task(id: post.remoteID) { await refreshViews() }
+        .task(id: post.remoteID) { await refreshStats() }
     }
 
     @ViewBuilder private var publishCard: some View {
@@ -80,7 +80,9 @@ struct PostDetailView: View {
                     Label("Página publicada", systemImage: "checkmark.seal.fill")
                         .font(.subheadline).foregroundStyle(Brand.tealDeep)
                     Spacer()
-                    if let v = views { Label("\(v)", systemImage: "eye").font(.caption).foregroundStyle(.secondary) }
+                }
+                if let s = stats {
+                    statsRow(s)
                 }
                 Link(destination: url) {
                     Text(url.absoluteString).font(.caption).lineLimit(1).truncationMode(.middle)
@@ -104,6 +106,17 @@ struct PostDetailView: View {
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 
+    @ViewBuilder
+    private func statsRow(_ s: PageStats) -> some View {
+        HStack(spacing: 14) {
+            Label("\(s.views)", systemImage: "eye")
+            Label("\(s.useful)", systemImage: "hand.thumbsup")
+            Label("\(s.notUseful)", systemImage: "hand.thumbsdown")
+            Label("\(s.sourceClicks)", systemImage: "link")
+        }
+        .font(.caption).foregroundStyle(.secondary)
+    }
+
     private func publishThisPost() {
         isPublishing = true; publishError = nil
         Task {
@@ -113,7 +126,7 @@ struct PostDetailView: View {
                 post.syncStatus = .synced
                 post.updatedAt = Date()
                 try? context.save()
-                await refreshViews()
+                await refreshStats()
             } catch {
                 publishError = (error as? PublishError)?.errorDescription ?? error.localizedDescription
             }
@@ -131,7 +144,7 @@ struct PostDetailView: View {
                 post.syncStatus = .pending
                 post.updatedAt = Date()
                 try? context.save()
-                views = nil
+                stats = nil
             } catch {
                 publishError = (error as? PublishError)?.errorDescription ?? error.localizedDescription
             }
@@ -139,9 +152,9 @@ struct PostDetailView: View {
         }
     }
 
-    private func refreshViews() async {
-        guard let slug = post.remoteID else { views = nil; return }
-        views = await PublishClient().views(forSlug: slug)
+    private func refreshStats() async {
+        guard let slug = post.remoteID else { stats = nil; return }
+        stats = await PublishClient().stats(forSlug: slug)
     }
 }
 

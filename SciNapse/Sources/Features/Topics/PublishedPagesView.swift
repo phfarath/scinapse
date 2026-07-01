@@ -9,7 +9,7 @@ struct PublishedPagesView: View {
     @Query(filter: #Predicate<Topic> { $0.remoteID != nil }, sort: \Topic.updatedAt, order: .reverse)
     private var published: [Topic]
 
-    @State private var views: [String: Int] = [:]
+    @State private var stats: [String: PageStats] = [:]
     @State private var shareTarget: ShareTarget?
     @State private var busySlug: String?
     @State private var errorText: String?
@@ -28,10 +28,10 @@ struct PublishedPagesView: View {
                         HStack {
                             Text(topic.title).font(.headline)
                             Spacer()
-                            if let v = views[slug] {
-                                Label("\(v)", systemImage: "eye").font(.caption).foregroundStyle(.secondary)
-                            }
                             if busySlug == slug { ProgressView() }
+                        }
+                        if let s = stats[slug] {
+                            statsRow(s)
                         }
                         Link(destination: url) {
                             Text(url.absoluteString).font(.caption).foregroundStyle(.blue)
@@ -48,13 +48,24 @@ struct PublishedPagesView: View {
                         .disabled(busySlug == slug)
                     }
                     .padding(.vertical, 4)
-                    .task(id: slug) { views[slug] = await PublishClient().views(forSlug: slug) }
+                    .task(id: slug) { stats[slug] = await PublishClient().stats(forSlug: slug) }
                 }
             }
             if let err = errorText { Text(err).font(.caption).foregroundStyle(.red) }
         }
         .navigationTitle("Minhas páginas")
         .sheet(item: $shareTarget) { t in PublishShareView(url: t.url, title: t.title) }
+    }
+
+    @ViewBuilder
+    private func statsRow(_ s: PageStats) -> some View {
+        HStack(spacing: 12) {
+            Label("\(s.views)", systemImage: "eye")
+            Label("\(s.useful)", systemImage: "hand.thumbsup")
+            Label("\(s.notUseful)", systemImage: "hand.thumbsdown")
+            Label("\(s.sourceClicks)", systemImage: "link")
+        }
+        .font(.caption2).foregroundStyle(.secondary)
     }
 
     private func republish(_ topic: Topic) {
@@ -64,7 +75,7 @@ struct PublishedPagesView: View {
             do {
                 _ = try await PublishClient().publish(topic: topic, scope: .all)
                 topic.updatedAt = Date(); try? context.save()
-                views[slug] = await PublishClient().views(forSlug: slug)
+                stats[slug] = await PublishClient().stats(forSlug: slug)
             } catch { errorText = (error as? PublishError)?.errorDescription ?? error.localizedDescription }
             busySlug = nil
         }

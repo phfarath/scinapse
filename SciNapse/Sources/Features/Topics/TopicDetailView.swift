@@ -11,7 +11,7 @@ struct TopicDetailView: View {
     @State private var isPublishing = false
     @State private var publishError: String?
     @State private var showShare = false
-    @State private var views: Int?
+    @State private var stats: PageStats?
     @State private var showConfirmUnpublish = false
 
     @Query private var allSaved: [Source]
@@ -35,9 +35,9 @@ struct TopicDetailView: View {
                     HStack {
                         Label("Publicado", systemImage: "checkmark.seal.fill").foregroundStyle(Brand.tealDeep)
                         Spacer()
-                        if let v = views {
-                            Label("\(v)", systemImage: "eye").font(.subheadline).foregroundStyle(.secondary)
-                        }
+                    }
+                    if let s = stats {
+                        statsRow(s)
                     }
                     Link(destination: url) {
                         Text(url.absoluteString).font(.caption).lineLimit(1).truncationMode(.middle)
@@ -130,7 +130,18 @@ struct TopicDetailView: View {
         } message: {
             Text("O link sai do ar. Você pode publicar de novo depois.")
         }
-        .task(id: topic.remoteID) { await refreshViews() }
+        .task(id: topic.remoteID) { await refreshStats() }
+    }
+
+    @ViewBuilder
+    private func statsRow(_ s: PageStats) -> some View {
+        HStack(spacing: 14) {
+            Label("\(s.views)", systemImage: "eye")
+            Label("\(s.useful)", systemImage: "hand.thumbsup")
+            Label("\(s.notUseful)", systemImage: "hand.thumbsdown")
+            Label("\(s.sourceClicks)", systemImage: "link")
+        }
+        .font(.caption).foregroundStyle(.secondary)
     }
 
     private func publishPage(scope: PublishScope) {
@@ -143,7 +154,7 @@ struct TopicDetailView: View {
                 topic.syncStatus = .synced
                 topic.updatedAt = Date()
                 try? context.save()
-                await refreshViews()
+                await refreshStats()
             } catch {
                 publishError = (error as? PublishError)?.errorDescription ?? error.localizedDescription
             }
@@ -162,7 +173,7 @@ struct TopicDetailView: View {
                 topic.syncStatus = .pending
                 topic.updatedAt = Date()
                 try? context.save()
-                views = nil
+                stats = nil
             } catch {
                 publishError = (error as? PublishError)?.errorDescription ?? error.localizedDescription
             }
@@ -170,8 +181,8 @@ struct TopicDetailView: View {
         }
     }
 
-    private func refreshViews() async {
-        guard let slug = topic.remoteID else { views = nil; return }
-        views = await PublishClient().views(forSlug: slug)
+    private func refreshStats() async {
+        guard let slug = topic.remoteID else { stats = nil; return }
+        stats = await PublishClient().stats(forSlug: slug)
     }
 }

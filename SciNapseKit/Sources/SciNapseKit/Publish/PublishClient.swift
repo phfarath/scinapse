@@ -50,6 +50,21 @@ public struct PublishResult: Codable, Sendable {
     public let url: URL
 }
 
+/// Stats agregados de uma página publicada (views + reações + cliques em fonte).
+public struct PageStats: Sendable, Codable {
+    public let views: Int
+    public let useful: Int
+    public let notUseful: Int
+    public let sourceClicks: Int
+
+    enum CodingKeys: String, CodingKey {
+        case views
+        case useful
+        case notUseful = "not_useful"
+        case sourceClicks = "source_clicks"
+    }
+}
+
 public enum PublishError: Error, LocalizedError {
     case noSyntheses
     case network
@@ -91,16 +106,23 @@ public struct PublishClient: Sendable {
         _ = try await postFunction(path: "unpublish", body: Body(slug: slug, secret: Config.publishSecret))
     }
 
-    /// Lê o contador de visualizações de um slug (nil se falhar/não existir).
-    public func views(forSlug slug: String) async -> Int? {
-        guard let url = URL(string: "\(Config.supabaseURL)/rest/v1/published_topics?slug=eq.\(slug)&select=views") else { return nil }
+    /// Lê os stats (views + reações + cliques em fonte) de um slug via RPC `page_stats` (nil se falhar).
+    public func stats(forSlug slug: String) async -> PageStats? {
+        guard let url = URL(string: "\(Config.supabaseURL)/rest/v1/rpc/page_stats") else { return nil }
         var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(Config.supabaseAnonKey, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(Config.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        struct Body: Encodable {
+            let slug: String
+            enum CodingKeys: String, CodingKey { case slug = "p_slug" }
+        }
+        guard let body = try? JSONEncoder().encode(Body(slug: slug)) else { return nil }
+        req.httpBody = body
         guard let (data, resp) = try? await session.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-        struct Row: Decodable { let views: Int }
-        return (try? JSONDecoder().decode([Row].self, from: data))?.first?.views
+        return try? JSONDecoder().decode(PageStats.self, from: data)
     }
 
     /// URL pública de um slug já publicado (reconstruída, sem rede).
