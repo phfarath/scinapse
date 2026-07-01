@@ -6,3 +6,8 @@ DerivedData/
 .swiftpm/
 .claude/
 .superpowers/
+
+# Artefatos de teste/preview (não versionar)
+.playwright-mcp/
+/scinapse-published-page.png
+/scinapse-reader-render.png
