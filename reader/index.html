@@ -78,6 +78,20 @@
     document.getElementById("content").innerHTML = `<p class="state">${esc(msg)}</p>`;
   }
 
+  // Conta 1 view por navegador por página (dedupe via localStorage), fire-and-forget.
+  function countView(slug) {
+    try {
+      const key = "scinapse_seen_" + slug;
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch (_) { /* localStorage indisponível: conta assim mesmo */ }
+    fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_views`, {
+      method: "POST",
+      headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_slug: slug }),
+    }).catch(() => {});
+  }
+
   async function load() {
     const slug = location.hash.slice(1).trim();
     if (!slug) { showState("Link inválido — sem identificador de página."); return; }
@@ -100,6 +114,7 @@
       document.getElementById("content").innerHTML = syntheses.length
         ? syntheses.map(renderSynthesis).join("")
         : `<p class="state">Nenhuma síntese publicada ainda.</p>`;
+      countView(slug);
     } catch (e) {
       showState("Erro de conexão ao carregar a página.");
     }
