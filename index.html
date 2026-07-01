@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SciNapse">
+<meta property="og:title" content="SciNapse — síntese científica com fontes verificáveis">
+<meta property="og:description" content="Achados clínicos ancorados em fontes verificáveis, com tiers de confiança e checagem de retratação.">
+<meta property="og:image" content="https://phfarath.github.io/scinapse/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <title>SciNapse</title>
 <style>
   :root { --blue:#1267EA; --blue-deep:#0642B5; --teal:#14D7B1; --ink:#0f172a; --muted:#64748b; }
@@ -30,6 +36,12 @@
   .srclink { display:inline-block; margin-top:8px; font-size:13px; color:var(--blue); text-decoration:none; font-weight:600; }
   .nosrc { color:#b91c1c; font-size:13px; margin-top:8px; }
   .state { color:var(--muted); text-align:center; margin-top:64px; padding:0 24px; }
+  .react { margin-top:24px; padding:16px; border-radius:16px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); text-align:center; }
+  .react-q { font-size:14px; color:var(--muted); margin-bottom:10px; }
+  .react-btns { display:flex; gap:10px; justify-content:center; }
+  .react-btn { font-size:14px; font-weight:600; padding:8px 16px; border-radius:999px; border:1px solid #e2e8f0; background:#f8fafc; color:var(--ink); cursor:pointer; }
+  .react-btn:hover { border-color:var(--blue); color:var(--blue); }
+  .react-thanks { font-size:14px; color:var(--teal); font-weight:600; }
   footer { text-align:center; color:var(--muted); font-size:12px; margin-top:28px; padding-bottom:24px; }
 </style>
 </head>
@@ -59,7 +71,10 @@
     const retr = (src?.retraction && src.retraction !== "none")
       ? `<span class="badge retr">${esc(retractionLabel[src.retraction] ?? "Retratado")}</span>` : "";
     const cite = src?.vancouver ? `<div class="cite">${esc(src.vancouver)}</div>` : "";
-    const link = src?.url ? `<a class="srclink" href="${esc(src.url)}" target="_blank" rel="noopener noreferrer">Abrir fonte ↗</a>` : "";
+    const ref = String(src?.vancouver || src?.title || "").slice(0, 120);
+    const link = src?.url
+      ? `<a class="srclink" data-source-click data-tier="${esc(tier)}" data-ref="${esc(ref)}" href="${esc(src.url)}" target="_blank" rel="noopener noreferrer">Abrir fonte ↗</a>`
+      : "";
     return `<li class="source">${cite}<div class="badges">${badge}${retr}</div>${link}</li>`;
   }
 
@@ -72,6 +87,50 @@
       : `<div class="nosrc">Sem fontes.</div>`;
     return `<article class="synth">${date}${heading}${text}<div class="sources-h">Fontes</div>${sources}</article>`;
   }
+
+  function renderReactionBar(slug) {
+    const key = "scinapse_react_" + slug;
+    let voted = false;
+    try { voted = !!localStorage.getItem(key); } catch (_) {}
+    if (voted) return `<div class="react"><span class="react-thanks">Obrigado pelo feedback 🙏</span></div>`;
+    return `<div class="react" id="reactBar">
+      <div class="react-q">Isto foi útil?</div>
+      <div class="react-btns">
+        <button type="button" class="react-btn" data-vote="useful">👍 Útil</button>
+        <button type="button" class="react-btn" data-vote="not_useful">👎 Não</button>
+      </div>
+    </div>`;
+  }
+
+  function recordReaction(slug, value) {
+    try { localStorage.setItem("scinapse_react_" + slug, "1"); } catch (_) {}
+    fetch(`${SUPABASE_URL}/rest/v1/rpc/record_reaction`, {
+      method: "POST",
+      headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_slug: slug, p_value: value }),
+    }).catch(() => {});
+  }
+
+  document.addEventListener("click", (e) => {
+    const link = e.target.closest("[data-source-click]");
+    if (link) {
+      const slug = location.hash.slice(1).trim();
+      fetch(`${SUPABASE_URL}/rest/v1/rpc/record_source_click`, {
+        method: "POST",
+        keepalive: true,
+        headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_slug: slug, p_tier: link.dataset.tier, p_ref: link.dataset.ref }),
+      }).catch(() => {});
+      return;
+    }
+    const voteBtn = e.target.closest("[data-vote]");
+    if (voteBtn) {
+      const slug = location.hash.slice(1).trim();
+      recordReaction(slug, voteBtn.dataset.vote);
+      const bar = document.getElementById("reactBar");
+      if (bar) bar.outerHTML = `<div class="react"><span class="react-thanks">Obrigado pelo feedback 🙏</span></div>`;
+    }
+  });
 
   function showState(msg) {
     document.getElementById("title").textContent = "SciNapse";
@@ -112,7 +171,7 @@
         ? `Atualizado em ${String(row.updated_at).slice(0,10)}` : "";
       const syntheses = Array.isArray(data.syntheses) ? data.syntheses : [];
       document.getElementById("content").innerHTML = syntheses.length
-        ? syntheses.map(renderSynthesis).join("")
+        ? syntheses.map(renderSynthesis).join("") + renderReactionBar(slug)
         : `<p class="state">Nenhuma síntese publicada ainda.</p>`;
       countView(slug);
     } catch (e) {
