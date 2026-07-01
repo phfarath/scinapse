@@ -14,9 +14,15 @@ struct TopicListView: View {
             List {
                 ForEach(topics) { topic in
                     NavigationLink(value: topic.id) {
-                        VStack(alignment: .leading) {
-                            Text(topic.title).font(.headline)
-                            Text("\(topic.posts.count) posts").font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 12) {
+                            Image(systemName: "books.vertical.fill")
+                                .font(.title3)
+                                .foregroundStyle(Brand.blue)
+                                .frame(width: 30)
+                            VStack(alignment: .leading) {
+                                Text(topic.title).font(.headline)
+                                Text("\(topic.posts.count) posts").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -28,14 +34,18 @@ struct TopicListView: View {
                 }
             }
             .navigationTitle("SciNapse")
+            .navigationBarTitleDisplayMode(.inline)
             .overlay {
                 if topics.isEmpty {
                     ContentUnavailableView("Nenhum tópico", systemImage: "tray", description: Text("Crie um tópico para começar"))
                 }
             }
             .toolbar {
-                Button { showingNew = true } label: { Image(systemName: "plus") }
-                    .accessibilityIdentifier("addTopicButton")
+                ToolbarItem(placement: .principal) { SciNapseWordmark() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingNew = true } label: { Image(systemName: "plus") }
+                        .accessibilityIdentifier("addTopicButton")
+                }
             }
             .alert("Novo tópico", isPresented: $showingNew) {
                 TextField("Nome", text: $newName).accessibilityIdentifier("topicNameField")

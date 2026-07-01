@@ -19,8 +19,8 @@ enum BadgeStyle {
     }
     static func color(_ tier: TrustTier) -> Color {
         switch tier {
-        case .verified: return .green
-        case .recognized: return .blue
+        case .verified: return Brand.tealDeep
+        case .recognized: return Brand.blue
         case .unverified: return .orange
         }
     }
