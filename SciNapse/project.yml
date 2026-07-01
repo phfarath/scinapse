@@ -24,8 +24,8 @@ targets:
         DEVELOPMENT_TEAM: 78P7499NZ8
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
-        MARKETING_VERSION: "0.7.0"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "0.8.0"
+        CURRENT_PROJECT_VERSION: "9"
     configFiles:
       Debug: Secrets.xcconfig
       Release: Secrets.xcconfig
@@ -56,8 +56,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 78P7499NZ8
-        MARKETING_VERSION: "0.7.0"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "0.8.0"
+        CURRENT_PROJECT_VERSION: "9"
     entitlements:
       path: ShareExtension/SciNapseShare.entitlements
       properties:
